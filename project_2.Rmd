@@ -1,0 +1,18 @@
+---
+title: "Reproducible Research Course Project 2"
+author: "Jessica Dyer"
+date: "12/3/2020"
+output: html_document
+---
+
+```{r setup, echo=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+file_url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+if(!file.exists("./data")){dir.create("./data")}
+download.file(file_url, destfile = "./data/reproducible_research_project_2.bz2", method = "curl")
+
+# 2. Read data into global environment
+storm <- read.table("data/reproducible_research_project_2.bz2", header = TRUE, sep = ",", dec = ".")
+```
+
