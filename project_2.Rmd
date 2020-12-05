@@ -5,14 +5,125 @@ date: "12/3/2020"
 output: html_document
 ---
 
+# Impacts of Storm Events on Population Health and Economics in the United States from 1950-2011
+
+## Synopsis 
+
+In this report, we aim to explore which types of storm events are most harmful with respect to population health and which types of storm events have the greatest economic consequences in the United States. Our overall hypothesis is that...
+
+To investigate this hypothesis, 
+
 ```{r setup, echo=TRUE}
-knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readr)
 
 file_url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
-if(!file.exists("./data")){dir.create("./data")}
-download.file(file_url, destfile = "./data/reproducible_research_project_2.bz2", method = "curl")
+if(!file.exists("./data/reproducible_research_project_2.bz2")){
+  download.file(file_url, destfile = "./data/reproducible_research_project_2.csv.bz2", method = "curl")
+}
 
 # 2. Read data into global environment
-storm <- read.table("data/reproducible_research_project_2.bz2", header = TRUE, sep = ",", dec = ".")
+if(!exists("storm_data")) {
+  storm_data <- read.table("data/reproducible_research_project_2.csv.bz2", header = TRUE, sep = ",", dec = ".")
+}
+
+# 3. Check the dimensions of the data
+dim(storm_data)
+
+# 4. Check "event type" to get a sense for what types of events are in the dataset
+  # Ensure that all the event types are upper case & extra spaces or punctuation are removed
+  storm_data$EVTYPE <- toupper(storm_data$EVTYPE)
+  storm_data$EVTYPE <- trimws(storm_data$EVTYPE, which = c("both"))
+  unique_states <- unique(storm_data$STATE)
+  unique_events <- unique(storm_data$EVTYPE)
+  NROW(unique_events)
+
+# 5. Add a 'year' variable 
+storm_data$begin_date <- as.Date(storm_data$BGN_DATE,"%m/%d/%Y")
+storm_data$year <- format(storm_data$begin_date,"%Y")
+
+# 6. Add a 'region' variable to look at regional differences (regions from NOAA website)
+regions <- data.frame(region = "Central", state = c("IL", "IN",	"KY",	"MO",	"OH",	"TN",	"WV"))
+east_n_central <- (data.frame(region = "East North Central", state = c("IA",	"MI",	"MN",	"WI")))
+northeast <- (data.frame(region = "Northeast", state = c("CT",	"DE",	"ME",	"MD",	"MA",	"NH",	"NJ",	"NY",	"PA",	"RI",	"VT")))
+northwest <- (data.frame(region = "Northwest", state =c("ID",	"OR",	"WA")))
+south <- (data.frame(region = "South", state =c("AR",	"KS",	"LA",	"MS",	"OK",	"TX")))
+southeast <- (data.frame(region = "Southeast", state =c("AL",	"FL",	"GA",	"NC",	"SC",	"VA")))
+southwest <- (data.frame(region = "Southwest", state =c("AZ",	"CO",	"NM",	"UT")))
+west <- (data.frame(region = "West", state =c("CA", "NV")))
+west_n_central <- (data.frame(region = "West North Central", state =c("MT",	"NE",	"ND",	"SD",	"WY")))
+
+regions <- rbind(regions, east_n_central, northeast, northwest, south, southeast, southwest, west, west_n_central)
+
+library(glue)
+assign_regions <- function(df){
+  status_increment = 10000
+  nrows_in_df <- nrow(df)
+  df$region <- "NULL" 
+  for (n in 1:nrows_in_df) {
+    if (n==1 | n%%status_increment == 0) {
+      message(glue("Working on row #{n} of {nrows_in_df}"))
+    }
+    
+    index_of_match <- match(df$STATE[n], regions$state)
+    if(!is.na(index_of_match)) {
+      region <- regions$region[index_of_match]
+      df$region[n] <- region 
+    }
+  }
+}
+    
+  
+
+
 ```
+
+## Variables of interest
+
+For this analysis, we'll be looking at fatalities and injuries by storm type as well as the economic impacts by storm type. Our variables of interest include: 
+- EVTYPE: Type of weather event, i.e. "Avalanche", "High Wind"
+- FATALITIES: Fatalities due to specific weather event
+- INJURIES: Injuries due to specific weather event
+- PROPDMG:Property damage in millions of USD
+- CROPDMG: Crop damage in millions of dollars
+
+1. Look at the ten weather events that caused the most fatalities. 
+```{r, echo=TRUE}
+fatalities <- aggregate(FATALITIES ~ EVTYPE, data = storm_data, sum)
+fatalities <- arrange(fatalities, desc(FATALITIES))
+fatalities_ten <- head(fatalities, n=10)
+```
+
+2. Look at the ten weather events that caused the most fatalities. 
+```{r, echo=TRUE}
+injuries <- aggregate(INJURIES ~ EVTYPE, data = storm_data, sum)
+injuries <- arrange(injuries, desc(INJURIES))
+injuries_ten <- head(injuries, n=10)
+```
+
+3. Create a barplot showing the number of fatalities by event 
+
+```{r}
+par(mar = c(6, 4, 4, 2), mfrow = c(1, 2))
+
+barplot(fatalities_ten$FATALITIES, 
+        ylim = c(0, 6000),
+        names.arg = fatalities_ten$EVTYPE, 
+        cex.names = 0.5,
+        las = 2, 
+        main = "Number of fatalities caused by severe weather events in the United States (1950-2011)", 
+        ylab = "Number of fatalities"
+        )
+
+barplot(injuries_ten$INJURIES/1000, 
+        ylim = c(0, 100),
+        names.arg = injuries_ten$EVTYPE, 
+        cex.names = 0.5,
+        las = 2, 
+        main = "Number of injuries caused by severe weather events in the United States (1950-2011)", 
+        ylab = "Number of injuries (in thousands)"
+        )
+
+```
+4. Look at regional differences in fatalities and injuries.  
 
