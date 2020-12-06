@@ -43,17 +43,18 @@ storm_data$begin_date <- as.Date(storm_data$BGN_DATE,"%m/%d/%Y")
 storm_data$year <- format(storm_data$begin_date,"%Y")
 
 # 6. Add a 'region' variable to look at regional differences (regions from NOAA website)
-regions <- data.frame(region = "Central", state = c("IL", "IN",	"KY",	"MO",	"OH",	"TN",	"WV"))
-east_n_central <- (data.frame(region = "East North Central", state = c("IA",	"MI",	"MN",	"WI")))
-northeast <- (data.frame(region = "Northeast", state = c("CT",	"DE",	"ME",	"MD",	"MA",	"NH",	"NJ",	"NY",	"PA",	"RI",	"VT")))
-northwest <- (data.frame(region = "Northwest", state =c("ID",	"OR",	"WA")))
+regions <- data.frame(region = "Central", state = c("IL", "IN",	"KY",	"MO",	"OH",	"TN",	"WV", "LE"))
+east_n_central <- (data.frame(region = "East North Central", state = c("IA",	"MI",	"MN",	"WI", "LC", "LH", "LM", "SL", "LS")))
+northeast <- (data.frame(region = "Northeast", state = c("CT",	"DE",	"ME",	"MD",	"MA",	"NH",	"NJ",	"NY",	"PA",	"RI",	"VT", "AN", "SL", "LO", "XX")))
+northwest <- (data.frame(region = "Northwest", state =c("ID",	"OR",	"WA", "AK", "PK")))
 south <- (data.frame(region = "South", state =c("AR",	"KS",	"LA",	"MS",	"OK",	"TX")))
-southeast <- (data.frame(region = "Southeast", state =c("AL",	"FL",	"GA",	"NC",	"SC",	"VA")))
+southeast <- (data.frame(region = "Southeast", state =c("AL",	"FL",	"GA",	"NC",	"SC",	"VA", "DC", "AM", "GM", "ST")))
 southwest <- (data.frame(region = "Southwest", state =c("AZ",	"CO",	"NM",	"UT")))
 west <- (data.frame(region = "West", state =c("CA", "NV")))
 west_n_central <- (data.frame(region = "West North Central", state =c("MT",	"NE",	"ND",	"SD",	"WY")))
+islands <- (data.frame(region = "Islands", state =c("HI", "PR", "AS", "GU", "MH", "VI", "PH", "PZ", "PM")))
 
-regions <- rbind(regions, east_n_central, northeast, northwest, south, southeast, southwest, west, west_n_central)
+regions <- rbind(regions, east_n_central, northeast, northwest, south, southeast, southwest, west, west_n_central, islands)
 
 library(glue)
 assign_regions <- function(df){
@@ -72,13 +73,17 @@ assign_regions <- function(df){
     }
   }
 }
-    
-  
+
+states_regions <- regions$state    
+common_states <- common_states <- intersect(unique_states, states_regions)
+unmatched_states <- unique_states [! unique_states %in% common_states]
+
 
 
 ```
 
 ## Variables of interest
+
 
 For this analysis, we'll be looking at fatalities and injuries by storm type as well as the economic impacts by storm type. Our variables of interest include: 
 - EVTYPE: Type of weather event, i.e. "Avalanche", "High Wind"
@@ -127,3 +132,9 @@ barplot(injuries_ten$INJURIES/1000,
 ```
 4. Look at regional differences in fatalities and injuries.  
 
+```{r, echo = TRUE}
+
+
+
+
+```
