@@ -2,7 +2,16 @@
 title: "Reproducible Research Course Project 2"
 author: "Jessica Dyer"
 date: "12/3/2020"
-output: html_document
+output:
+  html_document:
+    code_folding: hide
+    theme: flatly
+    toc: true
+    toc_depth: 4
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+      number_sections: true
 ---
 
 # Impacts of Storm Events on Population Health and Economics in the United States from 1950-2011
@@ -12,11 +21,27 @@ output: html_document
 In this report, we aim to explore which types of storm events are most harmful with respect to population health and which types of storm events have the greatest economic consequences in the United States. Our overall hypothesis is that...
 
 To investigate this hypothesis, 
+## Population Health
 
-```{r setup, echo=TRUE}
+### Data Processing
+
+#### Load libraries 
+
+```{r, echo=TRUE, warning=FALSE, message = FALSE}
 library(tidyverse)
 library(readr)
+library(dplyr)
 
+```
+
+#### Load data & clean  
+- Load the raw data, download from the internet if it has not been downloaded
+- Check "EVTYPE" to ensure there are no leading spaces or other inconsistencies 
+- Format the dates
+- Add a 'year' variable 
+
+```{r, echo=TRUE, warning=FALSE}
+# 1. Load the data
 file_url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
 if(!file.exists("./data/reproducible_research_project_2.bz2")){
   download.file(file_url, destfile = "./data/reproducible_research_project_2.csv.bz2", method = "curl")
@@ -42,7 +67,70 @@ dim(storm_data)
 storm_data$begin_date <- as.Date(storm_data$BGN_DATE,"%m/%d/%Y")
 storm_data$year <- format(storm_data$begin_date,"%Y")
 
-# 6. Add a 'region' variable to look at regional differences (regions from NOAA website)
+```
+
+### Variables of interest: Health
+
+For the population health portion of this analysis, we'll be looking at fatalities and injuries by storm type. Our variables of interest include: 
+
+- EVTYPE: Type of weather event, i.e. "Avalanche", "High Wind"  
+- FATALITIES: Fatalities due to specific weather event  
+- INJURIES: Injuries due to specific weather event  
+
+
+### Results: Fatalities and injuries
+
+1. Look at the ten weather events that caused the most fatalities in all states and areas. 
+```{r, echo=TRUE}
+fatalities <- aggregate(FATALITIES ~ EVTYPE, data = storm_data, sum)
+fatalities <- arrange(fatalities, desc(FATALITIES))
+fatalities_ten <- head(fatalities, n=10)
+fatalities_ten
+```
+
+2. Look at the ten weather events that caused the most injuries in all states and areas. 
+```{r, echo=TRUE}
+injuries <- aggregate(INJURIES ~ EVTYPE, data = storm_data, sum)
+injuries <- arrange(injuries, desc(INJURIES))
+injuries_ten <- head(injuries, n=10)
+injuries_ten
+```
+
+#### Fatalities and injuries by event
+3. Create a barplot showing the number of fatalities and injuries by event 
+
+```{r, echo=TRUE}
+par(mar = c(6, 4, 4, 2), mfrow = c(1, 2))
+
+barplot(fatalities_ten$FATALITIES, 
+        ylim = c(0, 6000),
+        names.arg = fatalities_ten$EVTYPE, 
+        cex.names = 0.5,
+        cex.main = 0.8,
+        las = 2, 
+        main = "Number of fatalities caused by severe weather \nevents in the United States (1950-2011)", 
+        ylab = "Number of fatalities"
+        )
+
+barplot(injuries_ten$INJURIES/1000, 
+        ylim = c(0, 100),
+        names.arg = injuries_ten$EVTYPE, 
+        cex.names = 0.5,
+        cex.main = 0.8,
+        las = 2, 
+        main = "Number of injuries caused by severe weather \nevents in the United States (1950-2011)", 
+        ylab = "Number of injuries (in thousands)"
+        )
+
+```
+
+#### Fatalities and injuries by event and region
+
+4. Look at regional differences in fatalities and injuries. 
+
+```{r, echo = TRUE}
+# 1. Add a 'region' variable to look at regional differences (regions from NOAA website, Wikipedia, & grouping remaining unmatched regions with associated states based on the variable COUNTYNAME. There are 72 "states", "us territories", and "regions" in this data frame.)
+
 regions <- data.frame(region = "Central", state = c("IL", "IN",	"KY",	"MO",	"OH",	"TN",	"WV", "LE"))
 east_n_central <- (data.frame(region = "East North Central", state = c("IA",	"MI",	"MN",	"WI", "LC", "LH", "LM", "LS")))
 northeast <- (data.frame(region = "Northeast", state = c("CT",	"DE",	"ME",	"MD",	"MA",	"NH",	"NJ",	"NY",	"PA",	"RI",	"VT", "AN", "SL", "LO", "XX")))
@@ -56,83 +144,204 @@ islands <- (data.frame(region = "Islands", state =c("HI", "PR", "AS", "GU", "MH"
 
 regions <- rbind(regions, east_n_central, northeast, northwest, south, southeast, southwest, west, west_n_central, islands)
 
+# 2. Make sure all of the states are classified into a region
 states_regions <- regions$state  
 unique_states <- unique(storm_data$STATE)
 common_states <-  intersect(unique_states, states_regions)
 unmatched_states <- unique_states [! unique_states %in% common_states]
 
-library(glue)
-assign_regions <- function(df){
-  status_increment = 10000
-  nrows_in_df <- nrow(df)
-  df$region <- "NULL" 
-  for (n in 1:nrows_in_df) {
-    if (n==1 | n%%status_increment == 0) {
-      message(glue("Working on row #{n} of {nrows_in_df}"))
-    }
-    
-    index_of_match <- match(df$STATE[n], regions$state)
-    if(!is.na(index_of_match)) {
-      region <- regions$region[index_of_match]
-      df$region[n] <- region 
+# 3. Make region table to include the numbers of the states with a merge on state 
+state_numbers <- data.frame(storm_data[, c("STATE", "STATE__")])
+
+state_numbers <- distinct(state_numbers, STATE, .keep_all = TRUE)
+
+regions <- regions %>% 
+  rename(
+    STATE = state
+  )
+
+regions <- merge(regions, state_numbers)
+
+# 4. Set duplicate state number 20 to NA (this is one value, that looks to be incorrectly coded as "ST")
+bad_state_index = match("ST", storm_data$STATE)
+storm_data$STATE__[bad_state_index] <- NA
+
+# 5. Build vector of regions at index 
+build_region_lookup <- function(regions) {
+  max_state_id <- max(regions$STATE__)
+  my_lookup_vector <- vector(mode="character", length=max_state_id)
+  for (i in 1:nrow(regions)) {
+    state_id <- regions$STATE__[i]
+    if (!is.na(state_id)) {
+      my_lookup_vector[state_id] <- regions$region[i]
     }
   }
-}
-```
+  return (my_lookup_vector)
+} 
 
-## Variables of interest
+# 6. Assign region to each row of the storm dataframe based on STATE__
+state_id_to_region <- build_region_lookup(regions)
+storm_data$region <-state_id_to_region[storm_data$STATE__]
 
+# 7. Look at fatalities by region
+regional_fatalities <- aggregate(FATALITIES ~ region, data = storm_data, sum)
+regional_fatalities <- arrange(regional_fatalities, desc(FATALITIES))
+regional_fatalities <- head(regional_fatalities, n=10)
 
-For this analysis, we'll be looking at fatalities and injuries by storm type as well as the economic impacts by storm type. Our variables of interest include: 
-- EVTYPE: Type of weather event, i.e. "Avalanche", "High Wind"
-- FATALITIES: Fatalities due to specific weather event
-- INJURIES: Injuries due to specific weather event
-- PROPDMG:Property damage in millions of USD
-- CROPDMG: Crop damage in millions of dollars
-
-1. Look at the ten weather events that caused the most fatalities. 
-```{r, echo=TRUE}
-fatalities <- aggregate(FATALITIES ~ EVTYPE, data = storm_data, sum)
-fatalities <- arrange(fatalities, desc(FATALITIES))
-fatalities_ten <- head(fatalities, n=10)
-```
-
-2. Look at the ten weather events that caused the most fatalities. 
-```{r, echo=TRUE}
-injuries <- aggregate(INJURIES ~ EVTYPE, data = storm_data, sum)
-injuries <- arrange(injuries, desc(INJURIES))
-injuries_ten <- head(injuries, n=10)
-```
-
-3. Create a barplot showing the number of fatalities by event 
-
-```{r}
-par(mar = c(6, 4, 4, 2), mfrow = c(1, 2))
-
-barplot(fatalities_ten$FATALITIES, 
-        ylim = c(0, 6000),
-        names.arg = fatalities_ten$EVTYPE, 
-        cex.names = 0.5,
+# 8. Make a barplot to graphically depict the number of fatalities by region
+barplot(regional_fatalities$FATALITIES, 
+        ylim = c(0, 4000),
+        names.arg = regional_fatalities$region, 
+        cex.names = 0.6,
+        cex.main = 0.9,
         las = 2, 
-        main = "Number of fatalities caused by severe weather events in the United States (1950-2011)", 
+        main = "Number of fatalities caused by severe weather \nevents in the United States by region (1950-2011)", 
         ylab = "Number of fatalities"
         )
 
-barplot(injuries_ten$INJURIES/1000, 
-        ylim = c(0, 100),
-        names.arg = injuries_ten$EVTYPE, 
-        cex.names = 0.5,
-        las = 2, 
-        main = "Number of injuries caused by severe weather events in the United States (1950-2011)", 
-        ylab = "Number of injuries (in thousands)"
-        )
+```
+
+
+5. Return the weather event that produces the most fatalities within each region and the number of fatalities 
+
+```{r, echo = TRUE, warning=FALSE}
+## 
+regional_fatalities_top <- data.frame(region = character(), EVTYPE = character(), FATALITIES = double())
+
+unique_regions <- unique(regions$region)
+
+for(r in unique_regions) {
+  central_df <- filter(storm_data, region == r)
+  central_df <- aggregate(FATALITIES ~ EVTYPE, data = central_df, sum)
+  central_df <- arrange(central_df, desc(FATALITIES))
+  new_row <- c(r, central_df$EVTYPE[1], central_df$FATALITIES[1])
+  regional_fatalities_top <- rbind(regional_fatalities_top, new_row)
+  names(new_row) <- c("region", "EVTYPE", "FATALITIES")
+}
+
+regional_fatalities_top <- regional_fatalities_top %>% 
+  rename(
+    Region = X.Northwest., 
+    Event = X.AVALANCHE., 
+    Fatalities = X.87.
+  )
+
+regional_fatalities_top$Fatalities <- as.numeric(regional_fatalities_top$Fatalities)
+regional_fatalities_top <- arrange(regional_fatalities_top, desc(Fatalities))
+regional_fatalities_top
+```
+
+
+## Economic Impacts
+### Data Processing  
+
+I will examine the economic variables to understand how to utilize them in this analysis. 
+```{r}
+econ_vars <- c('PROPDMG', 'PROPDMGEXP', 'CROPDMG', 'CROPDMGEXP')
+
+head(storm_data %>% select(econ_vars))
+```
+
+Based on details from the documentation on the variable 'PROPDMGEXP', the letters signify magnitude: 
+
+- “K” for thousands 
+- “M” for millions
+- “B” for billions
+
+Examine each variable: 
+1. PROPDMG
+```{r}
+summary(storm_data$PROPDMG)
+```
+
+2. PROPDMGEXP
+```{r}
+print(unique(storm_data$PROPDMGEXP))
+```
+
+- Make all of the values in PROPDMGEXP capital letters: 
+```{r}
+storm_data$PROPDMGEXP <- toupper(storm_data$PROPDMGEXP)
+print(unique(storm_data$PROPDMGEXP))
+```
+
+- I would like to see how many rows each of these appears: 
+```{r, echo = TRUE, warning = FALSE}
+exp_count = summarise(group_by(storm_data, PROPDMGEXP), count = n())
+exp_count = arrange(exp_count, PROPDMGEXP)
+exp_count
+```
+
+- I cannot say with certainty that the numbers '0-8' indicate the value that PROPDMG should be exponentiated. Therefore, those values will not be included in this analysis. 
+
+- Factor out the known exponetiators & then remove the exponentiators with a count of less than 40. 
+
+```{r}
+exp_count$PROPDMGEXP <- as.factor(exp_count$PROPDMGEXP)
+
+exp_keep <- levels(droplevels(exp_count$PROPDMGEXP[exp_count$count>39]))
+
+econ_impacts <- storm_data %>% 
+              filter(PROPDMGEXP %in% exp_keep) %>% 
+              select(c("EVTYPE", econ_vars))
 
 ```
-4. Look at regional differences in fatalities and injuries.  
 
-```{r, echo = TRUE}
+3. CROPDMG
+```{r}
+summary(storm_data$CROPDMG, useNA='always')
+```
 
+4. CROPDMGEXP
+```{r}
+storm_data$CROPDMGEXP <- toupper(storm_data$CROPDMGEXP)
+print(unique(storm_data$CROPDMGEXP))
+```
 
+```{r}
+exp_count_crop = summarise(group_by(storm_data, CROPDMGEXP), count = n())
+exp_count_crop = arrange(exp_count_crop, CROPDMGEXP)
+exp_count_crop
+
+```
+
+- For CROPDMGEXP, I'm not sure how to interpret '0', '?', or '2', so we will filter those out of the analysis dataframe
+```{r}
+exp_count_crop$CROPDMGEXP <- as.factor(exp_count_crop$CROPDMGEXP)
+
+exp_keep_crop <- levels(droplevels(exp_count_crop$CROPDMGEXP[exp_count_crop$CROPDMGEXP == "" | 
+                                                               exp_count_crop$CROPDMGEXP == "B" |
+                                                               exp_count_crop$CROPDMGEXP == "M" | 
+                                                               exp_count_crop$CROPDMGEXP == "K" | 
+                                                               exp_count_crop$CROPDMGEXP == "0"]))
+
+econ_impacts <- econ_impacts %>% 
+              filter(CROPDMGEXP %in% exp_keep_crop) %>% 
+              select(c("EVTYPE", econ_vars))
+
+head(econ_impacts)
+```
+
+- Multiply both PROPDMG & CROPDMG by exponentiators
+
+```{r}
+
+exp_map <- data.frame(letter = c("", "K", "M", "B"), mul_prop = c(1, 1000, 1000000, 1000000000))
+econ_impacts <- inner_join(econ_impacts, exp_map, by=c("PROPDMGEXP" = "letter"))
+
+exp_map_crop < -data.frame(letter = c("", "K", "M", "B"), mul_crop = c(1, 1000, 1000000, 1000000000))
+econ_impacts < -inner_join(econ_impacts, exp_map_crop, by=c("CROPDMGEXP" = "letter"))
+
+econ_impacts$property <- econ_impacts$PROPDMG * econ_impacts$mul_prop
+econ_impacts$crop <- econ_impacts$CROPDMG * econ_impacts$mul_crop
 
 
 ```
+
+### Variables of interest: Economic
+For the economic impact portion of this analysis, we'll be looking at property damage and crop damage. Our variables of interest include: 
+
+- PROPDMG:Property damage in millions of USD  
+- CROPDMG: Crop damage in millions of dollars  
+
+## Results: Economic
