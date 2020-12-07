@@ -1,6 +1,6 @@
 ---
-title: "Reproducible Research Course Project 2"
-author: "Jessica Dyer"
+title: "Impacts of Storm Events on Population Health and Economics in the United States from 1950-2011"
+author: "Jessica"
 date: "12/3/2020"
 output:
   html_document:
@@ -13,14 +13,39 @@ output:
       smooth_scroll: false
       number_sections: true
 ---
-
-# Impacts of Storm Events on Population Health and Economics in the United States from 1950-2011
-
 ## Synopsis 
 
-In this report, we aim to explore which types of storm events are most harmful with respect to population health and which types of storm events have the greatest economic consequences in the United States. Our overall hypothesis is that...
+The U.S. National Oceanic and Atmospheric Administration’s (NOAA) Storm Database, documents:  
 
-To investigate this hypothesis, 
+- The occurrence of storms and other significant weather phenomena having sufficient intensity to cause loss of life, injuries, significant property damage, and/or disruption to commerce; 
+- Rare, unusual, weather phenomena that generate media attention, such as snow flurries in South Florida or the San Diego coastal area; and 
+- Other significant meteorological events, such as record maximum or minimum temperatures or precipitation that occur in connection with another event.
+
+In this report, we aim to answer the following questions: 
+
+1. Across the United States, which types of weather events are most harmful with respect to population health?  
+
+2. Across the United States, which types of weather events have the greatest economic consequences?
+
+**Summary: the Health Impacts of Severe Weather Events**  
+
+From these data, we found that, 'tornado' is the weather event that has killed and injured the most people in the US and outlying areas between 1950 and 2011. Tornadoes have killed 5,633 people and injured 91,346 people. 
+
+There are regional differences across the US. We found that while tornadoes have a large impact on the overall number of fatalities across the US, they do not impact all regions homogeneously. Tornadoes have the largest impact on people living in the regions of the South, Central, and Southeast United States while the Northeast and West loose more people to Excessive Heat events.   
+
+Lastly, while 'tornado' is the weather event contributing to the most fatalities over time, the single event that had the most fatalities was an intense heat wave in 1995 in northern Illinois from Wednesday July 12 through Sunday July 16, killing 585 people. 
+
+**Summary: the Economic Impacts of Severe Weather Events**  
+
+From these data, we found that from 1950-2011, there has been $427,317,379,127 in property damage in the US and outlying areas.  The majority of this property damage ($144,657,709,807) has come from floods, which accounts for 34% of the total property damage. The biggest contributor to crop damage is 'drought', which totals $13,972,566,000 USD, or 29% of total crop damage in this time period. 
+
+The two major weather events that contribute the most to the property damage total are: 
+
+- 2006, California, Major flooding
+- 2005, Louisiana, Storm surge (Hurricane Katrina related)
+
+Regions plagued by tornadoes experience the most human fatalities and the most damage to property measured in USD. 
+
 ## Population Health
 
 ### Data Processing
@@ -31,7 +56,9 @@ To investigate this hypothesis,
 library(tidyverse)
 library(readr)
 library(dplyr)
-
+library(scales)
+library(viridis)
+library(hrbrthemes)
 ```
 
 #### Load data & clean  
@@ -65,7 +92,10 @@ dim(storm_data)
 
 # 5. Add a 'year' variable 
 storm_data$begin_date <- as.Date(storm_data$BGN_DATE,"%m/%d/%Y")
-storm_data$year <- format(storm_data$begin_date,"%Y")
+storm_data$year <- as.numeric(format(storm_data$begin_date,"%Y"))
+
+# 6. Processing for health variables 
+health_vars <- c('FATALITIES', 'INJURIES')
 
 ```
 
@@ -75,16 +105,17 @@ For the population health portion of this analysis, we'll be looking at fataliti
 
 - EVTYPE: Type of weather event, i.e. "Avalanche", "High Wind"  
 - FATALITIES: Fatalities due to specific weather event  
-- INJURIES: Injuries due to specific weather event  
-
+- INJURIES: Injuries due to specific weather event 
 
 ### Results: Fatalities and injuries
 
 1. Look at the ten weather events that caused the most fatalities in all states and areas. 
 ```{r, echo=TRUE}
+
 fatalities <- aggregate(FATALITIES ~ EVTYPE, data = storm_data, sum)
 fatalities <- arrange(fatalities, desc(FATALITIES))
 fatalities_ten <- head(fatalities, n=10)
+highest_death <- fatalities_ten[1,2]
 fatalities_ten
 ```
 
@@ -93,6 +124,7 @@ fatalities_ten
 injuries <- aggregate(INJURIES ~ EVTYPE, data = storm_data, sum)
 injuries <- arrange(injuries, desc(INJURIES))
 injuries_ten <- head(injuries, n=10)
+highest_injury <- injuries_ten[1,2]
 injuries_ten
 ```
 
@@ -128,7 +160,7 @@ barplot(injuries_ten$INJURIES/1000,
 
 4. Look at regional differences in fatalities and injuries. 
 
-```{r, echo = TRUE}
+```{r, echo = TRUE, warning=FALSE}
 # 1. Add a 'region' variable to look at regional differences (regions from NOAA website, Wikipedia, & grouping remaining unmatched regions with associated states based on the variable COUNTYNAME. There are 72 "states", "us territories", and "regions" in this data frame.)
 
 regions <- data.frame(region = "Central", state = c("IL", "IN",	"KY",	"MO",	"OH",	"TN",	"WV", "LE"))
@@ -187,19 +219,8 @@ storm_data$region <-state_id_to_region[storm_data$STATE__]
 regional_fatalities <- aggregate(FATALITIES ~ region, data = storm_data, sum)
 regional_fatalities <- arrange(regional_fatalities, desc(FATALITIES))
 regional_fatalities <- head(regional_fatalities, n=10)
-
-# 8. Make a barplot to graphically depict the number of fatalities by region
-barplot(regional_fatalities$FATALITIES, 
-        ylim = c(0, 4000),
-        names.arg = regional_fatalities$region, 
-        cex.names = 0.6,
-        cex.main = 0.9,
-        las = 2, 
-        main = "Number of fatalities caused by severe weather \nevents in the United States by region (1950-2011)", 
-        ylab = "Number of fatalities"
-        )
-
 ```
+
 
 
 5. Return the weather event that produces the most fatalities within each region and the number of fatalities 
@@ -231,12 +252,30 @@ regional_fatalities_top <- arrange(regional_fatalities_top, desc(Fatalities))
 regional_fatalities_top
 ```
 
+```{r, echo=TRUE, warning=FALSE}
+# Look at fatalties by region over time
+regional_fatalities_time <- aggregate(FATALITIES ~ year*region, data = storm_data, sum)
+regional_fatalities_time$year <- as.numeric(regional_fatalities_time$year)
+
+regional_fatalities_time %>%
+  ggplot( aes(x=year, y=FATALITIES, group=region, color=region)) +
+    geom_line() + 
+  scale_color_viridis(discrete = TRUE) +
+  ggtitle("All fatalities in the US from 1950-2011 by region") +
+  ylab("Fatalities") + 
+  xlab("Year") +
+  theme_ipsum()
+
+```
+
+- In 1995, an intense heat wave affected northern Illinois from Wednesday July 12 through Sunday July 16. The heat wave tied or broke several temperature records at Rockford and Chicago. But what set this heat wave apart from others was the extremely high humidities. Dew point temperatures peaked in the lower 80s late Wednesday the 12th and Thursday the 13th and were generally in the middle and upper 70s through the rest of the hot spell. The combined and cumulative effects of several days of high temperatures, high humidity, intense July sunshine (100% possible sunshine recorded at O'Hare Airport in Chicago July 13) and light winds took their toll. 583 people died as a result of the heat in Chicago and surrounding areas. 
+
 
 ## Economic Impacts
 ### Data Processing  
 
 I will examine the economic variables to understand how to utilize them in this analysis. 
-```{r}
+```{r, echo=TRUE, warning=FALSE}
 econ_vars <- c('PROPDMG', 'PROPDMGEXP', 'CROPDMG', 'CROPDMGEXP')
 
 head(storm_data %>% select(econ_vars))
@@ -249,18 +288,19 @@ Based on details from the documentation on the variable 'PROPDMGEXP', the letter
 - “B” for billions
 
 Examine each variable: 
+
 1. PROPDMG
-```{r}
+```{r, echo=TRUE, warning=FALSE}
 summary(storm_data$PROPDMG)
 ```
 
 2. PROPDMGEXP
-```{r}
+```{r, echo=TRUE, warning=FALSE}
 print(unique(storm_data$PROPDMGEXP))
 ```
 
 - Make all of the values in PROPDMGEXP capital letters: 
-```{r}
+```{r, echo=TRUE, warning=FALSE}
 storm_data$PROPDMGEXP <- toupper(storm_data$PROPDMGEXP)
 print(unique(storm_data$PROPDMGEXP))
 ```
@@ -276,29 +316,29 @@ exp_count
 
 - Factor out the known exponetiators & then remove the exponentiators with a count of less than 40. 
 
-```{r}
+```{r, echo=TRUE, warning=FALSE}
 exp_count$PROPDMGEXP <- as.factor(exp_count$PROPDMGEXP)
 
 exp_keep <- levels(droplevels(exp_count$PROPDMGEXP[exp_count$count>39]))
 
 econ_impacts <- storm_data %>% 
               filter(PROPDMGEXP %in% exp_keep) %>% 
-              select(c("EVTYPE", econ_vars))
+              select(c("EVTYPE", econ_vars, year, region))
 
 ```
 
 3. CROPDMG
-```{r}
+```{r, echo=TRUE, warning=FALSE}
 summary(storm_data$CROPDMG, useNA='always')
 ```
 
 4. CROPDMGEXP
-```{r}
+```{r, echo=TRUE, warning=FALSE}
 storm_data$CROPDMGEXP <- toupper(storm_data$CROPDMGEXP)
 print(unique(storm_data$CROPDMGEXP))
 ```
 
-```{r}
+```{r, echo=TRUE, warning=FALSE}
 exp_count_crop = summarise(group_by(storm_data, CROPDMGEXP), count = n())
 exp_count_crop = arrange(exp_count_crop, CROPDMGEXP)
 exp_count_crop
@@ -306,7 +346,7 @@ exp_count_crop
 ```
 
 - For CROPDMGEXP, I'm not sure how to interpret '0', '?', or '2', so we will filter those out of the analysis dataframe
-```{r}
+```{r, echo=TRUE, warning=FALSE}
 exp_count_crop$CROPDMGEXP <- as.factor(exp_count_crop$CROPDMGEXP)
 
 exp_keep_crop <- levels(droplevels(exp_count_crop$CROPDMGEXP[exp_count_crop$CROPDMGEXP == "" | 
@@ -317,20 +357,19 @@ exp_keep_crop <- levels(droplevels(exp_count_crop$CROPDMGEXP[exp_count_crop$CROP
 
 econ_impacts <- econ_impacts %>% 
               filter(CROPDMGEXP %in% exp_keep_crop) %>% 
-              select(c("EVTYPE", econ_vars))
+              select(c("EVTYPE", econ_vars, year, region))
 
 head(econ_impacts)
 ```
 
 - Multiply both PROPDMG & CROPDMG by exponentiators
 
-```{r}
-
+```{r, echo=TRUE, warning=FALSE}
 exp_map <- data.frame(letter = c("", "K", "M", "B"), mul_prop = c(1, 1000, 1000000, 1000000000))
 econ_impacts <- inner_join(econ_impacts, exp_map, by=c("PROPDMGEXP" = "letter"))
 
-exp_map_crop < -data.frame(letter = c("", "K", "M", "B"), mul_crop = c(1, 1000, 1000000, 1000000000))
-econ_impacts < -inner_join(econ_impacts, exp_map_crop, by=c("CROPDMGEXP" = "letter"))
+exp_map_crop <- data.frame(letter = c("", "K", "M", "B"), mul_crop = c(1, 1000, 1000000, 1000000000))
+econ_impacts <- inner_join(econ_impacts, exp_map_crop, by=c("CROPDMGEXP" = "letter"))
 
 econ_impacts$property <- econ_impacts$PROPDMG * econ_impacts$mul_prop
 econ_impacts$crop <- econ_impacts$CROPDMG * econ_impacts$mul_crop
@@ -338,10 +377,87 @@ econ_impacts$crop <- econ_impacts$CROPDMG * econ_impacts$mul_crop
 
 ```
 
-### Variables of interest: Economic
-For the economic impact portion of this analysis, we'll be looking at property damage and crop damage. Our variables of interest include: 
+## Results: Economic  
+1. From 1950-2011, how much total property damage and crop damage has occurred in USD? 
+```{r, echo=TRUE}
+property_sum <- dollar(sum(econ_impacts$property))
+crop_sum <- dollar(sum(econ_impacts$crop))
+```
 
-- PROPDMG:Property damage in millions of USD  
-- CROPDMG: Crop damage in millions of dollars  
+- From 1950-2011, there has been `r property_sum` in property damage and `r crop_sum` in crop damage.  
 
-## Results: Economic
+2. Look at the ten weather events that caused the most property damage in millions of USD. 
+```{r, echo=TRUE}
+property_damage <- aggregate(property ~ EVTYPE, data = econ_impacts, sum)
+property_damage$proportion <- round((property_damage$property/sum(property_damage$property))*100, 2)
+property_damage <- arrange(property_damage, desc(property))
+property_damage_ten <- head(property_damage, n=10)
+property_damage_ten
+```
+
+3. Look at the ten weather events that caused the most crop damage in millions of USD. 
+```{r, echo=TRUE}
+crop_damage <- aggregate(crop ~ EVTYPE, data = econ_impacts, sum)
+crop_damage <- arrange(crop_damage, desc(crop))
+crop_damage_ten <- head(crop_damage, n=10)
+crop_damage_ten
+```
+
+#### Property and Crop Damage
+3. Create a barplot showing the amount, in USD, of property and crop damage by event (top 10)
+
+```{r, echo=TRUE}
+par(mar = c(6, 4, 4, 2), mfrow = c(1, 2))
+
+barplot(property_damage_ten$property/1000000000, 
+        ylim = c(0, 160),
+        names.arg = property_damage_ten$EVTYPE, 
+        cex.names = 0.5,
+        cex.main = 0.8,
+        las = 2, 
+        main = "Amount of property damage caused by severe \nweather events in the United States (1950-2011)", 
+        ylab = "USD (in millions)"
+        )
+
+barplot(crop_damage_ten$crop/1000000000, 
+        ylim = c(0, 50),
+        names.arg = crop_damage_ten$EVTYPE, 
+        cex.names = 0.5,
+        cex.main = 0.8,
+        las = 2, 
+        main = "Amount of crop damage caused by severe \nweather events in the United States (1950-2011)", 
+        ylab = "USD (in millions)"
+        )
+
+```
+```{r, include=FALSE, warning=FALSE}
+# Look at property damage by region over time
+regional_property_time <- aggregate(property ~ year*region, data = econ_impacts, sum)
+regional_property_time$year <- as.numeric(regional_property_time$year)
+regional_property_time$millions <- (regional_property_time$property/1000000000)
+
+regional_property_time %>%
+  ggplot( aes(x=year, y=millions, group=region, color=region)) +
+    geom_line() + 
+  scale_color_viridis(discrete = TRUE) +
+  ggtitle("Property damage in the US from 1950-2011 by region") +
+  ylab("USD (in millions") + 
+  xlab("Year") +
+  theme_ipsum()
+
+```
+
+
+```{r, include=FALSE, warning=FALSE}
+property_damage_regional <- aggregate(property ~ region, data = econ_impacts, sum)
+
+property_damage_regional$millions <- property_damage_regional$property/1000000000
+p<-ggplot(data=property_damage_regional, aes(fill=region, x=region, y=millions)) +
+  geom_bar(stat="identity") +
+  scale_color_viridis(discrete = TRUE) +
+  ggtitle("Property damage in the US from 1950-2011 by region") +
+  ylab("USD (in millions") + 
+  theme_ipsum()+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank())
+```
